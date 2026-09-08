@@ -570,14 +570,14 @@ impl Sysopt {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "macos")]
+    use super::skip_without_network_service;
     use super::{
         AuthoritativeState, BYPASS_SEPARATOR, DEFAULT_BYPASS, OsProxyState, ProxyApplyStep, SystemProxyStateUnknown,
         authoritative_state, authoritative_state_from, classify_os_proxy_state, disable_both,
         disable_until_the_last_write_is_ours, first_failure, format_bypass, proxy_apply_steps,
         recover_from_failed_write, target_is_already_in_place,
     };
-    #[cfg(target_os = "macos")]
-    use super::skip_without_network_service;
     use parking_lot::Mutex;
     use std::collections::VecDeque;
     use sysproxy::{Autoproxy, Sysproxy};

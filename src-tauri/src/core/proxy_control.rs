@@ -1069,9 +1069,9 @@ mod tests {
         assert_eq!(refusal_classification(None), SysproxyFailure::PrivilegeRequired);
     }
 
-    use super::{SystemProxyStateUnknown, is_reportable_given, rollback_failure};
     #[cfg(target_os = "macos")]
     use super::service_apply_result;
+    use super::{SystemProxyStateUnknown, is_reportable_given, rollback_failure};
 
     #[cfg(target_os = "macos")]
     #[test]
