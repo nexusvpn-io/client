@@ -253,19 +253,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           releaseId: ${{ needs.prepare_release.outputs.release_id }}
           tagName: ${{ github.ref_name }}
           releaseBody: 'Draft release, will be updated later.'
           tauriScript: pnpm
           args: --target ${{ matrix.target }}
-          includeUpdaterJson: false
+          uploadUpdaterJson: false
 
       - name: Attest Windows bundles
         if: matrix.os == 'windows-latest'
@@ -335,10 +329,8 @@ jobs:
         with:
           run_install: false
 
-      - name: Pnpm install and check
-        run: |
-          pnpm i
-          pnpm run prebuild ${{ matrix.target }}
+      - name: Pnpm install
+        run: pnpm i
 
       - name: 'Setup for linux'
         run: |-
@@ -390,6 +382,12 @@ jobs:
           rustup target list --installed
           echo "Rust target ${{ matrix.target }} installed."
 
+      - name: Prebuild sidecars
+        run: pnpm run prebuild ${{ matrix.target }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: arm-linux-gnueabihf-gcc
+
       - name: Build for Linux
         run: |
           export PKG_CONFIG_ALLOW_CROSS=1
@@ -405,6 +403,8 @@ jobs:
           NODE_OPTIONS: '--max_old_space_size=4096'
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: arm-linux-gnueabihf-gcc
 
       - name: Attest Linux bundles
         uses: actions/attest-build-provenance@v4
