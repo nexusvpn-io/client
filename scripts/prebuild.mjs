@@ -568,7 +568,11 @@ async function resolveServiceBundle() {
     }
   })
 
-  const serviceRepository = path.resolve(cwd, '..', 'clash-verge-service-ipc')
+  const serviceRepository = path.resolve(
+    cwd,
+    'crates',
+    'clash-verge-service-ipc',
+  )
   const serviceManifest = path.join(serviceRepository, 'Cargo.toml')
   if (!fs.existsSync(serviceManifest)) {
     throw new Error(

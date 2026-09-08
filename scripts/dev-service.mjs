@@ -11,7 +11,7 @@ const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = resolve(scriptDirectory, '..')
 const serviceRepository = resolve(
   repositoryRoot,
-  '..',
+  'crates',
   'clash-verge-service-ipc',
 )
 const serviceManifest = join(serviceRepository, 'Cargo.toml')
