@@ -37,7 +37,7 @@ export interface VpnConfig {
   }
 }
 
-export interface TrialService {
+interface TrialService {
   id: number
   status: 'provisioning' | 'active' | 'expired' | 'failed'
   trafficLimit: number
