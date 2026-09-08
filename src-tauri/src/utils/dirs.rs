@@ -10,14 +10,14 @@ use std::{
 use tauri::Manager as _;
 
 #[cfg(not(feature = "verge-dev"))]
-pub static APP_ID: &str = "io.github.clash-verge-rev.clash-verge-rev";
+pub static APP_ID: &str = "ltd.nexusvpn.client";
 #[cfg(not(feature = "verge-dev"))]
-pub static BACKUP_DIR: &str = "clash-verge-rev-backup";
+pub static BACKUP_DIR: &str = "nexus-vpn-backup";
 
 #[cfg(feature = "verge-dev")]
-pub static APP_ID: &str = "io.github.clash-verge-rev.clash-verge-rev.dev";
+pub static APP_ID: &str = "ltd.nexusvpn.client.dev";
 #[cfg(feature = "verge-dev")]
-pub static BACKUP_DIR: &str = "clash-verge-rev-backup-dev";
+pub static BACKUP_DIR: &str = "nexus-vpn-backup-dev";
 
 pub static PORTABLE_FLAG: OnceCell<bool> = OnceCell::new();
 
@@ -171,13 +171,13 @@ pub fn update_interval_migrated_path() -> Result<PathBuf> {
 #[cfg(target_os = "macos")]
 pub fn service_path() -> Result<PathBuf> {
     let res_dir = app_resources_dir()?;
-    Ok(res_dir.join("clash-verge-service"))
+    Ok(res_dir.join("nexus-service"))
 }
 
 #[cfg(windows)]
 pub fn service_path() -> Result<PathBuf> {
     let res_dir = app_resources_dir()?;
-    Ok(res_dir.join("clash-verge-service.exe"))
+    Ok(res_dir.join("nexus-service.exe"))
 }
 
 pub fn sidecar_log_dir() -> Result<PathBuf> {
@@ -248,7 +248,7 @@ pub fn sidecar_ipc_path() -> Result<PathBuf> {
 
 #[cfg(target_os = "linux")]
 fn sidecar_ipc_path_for(app_root: &std::path::Path, _identity: &clash_verge_service_ipc::OwnerIdentity) -> PathBuf {
-    app_root.join("verge-mihomo.sock")
+    app_root.join("nexus-mihomo.sock")
 }
 
 #[cfg(target_os = "macos")]
@@ -274,9 +274,9 @@ fn sidecar_ipc_path_for(
     let root = std::ffi::CStr::from_bytes_until_nul(&buffer)
         .map_err(|_| anyhow::anyhow!("macOS per-user temporary directory is not NUL-terminated"))?;
     #[cfg(feature = "verge-dev")]
-    let filename = "verge-mihomo-dev.sock";
+    let filename = "nexus-mihomo-dev.sock";
     #[cfg(not(feature = "verge-dev"))]
-    let filename = "verge-mihomo.sock";
+    let filename = "nexus-mihomo.sock";
     let path = PathBuf::from(OsStr::from_bytes(root.to_bytes())).join(filename);
 
     let path_len = path.as_os_str().as_bytes().len();
@@ -299,7 +299,7 @@ fn sidecar_ipc_path_for(_app_root: &std::path::Path, identity: &clash_verge_serv
 fn sidecar_pipe_name(identity: &clash_verge_service_ipc::OwnerIdentity, is_dev: bool) -> String {
     let flavor = if is_dev { "dev" } else { "release" };
     format!(
-        r"\\.\pipe\verge-mihomo-sidecar-{flavor}-{}",
+        r"\\.\pipe\nexus-mihomo-sidecar-{flavor}-{}",
         clash_verge_service_ipc::owner_key(identity)
     )
 }
@@ -313,10 +313,10 @@ mod ipc_tests {
     #[test]
     fn sidecar_ipc_stays_in_the_app_root() {
         let identity = OwnerIdentity::Unix { uid: 501, gid: 20 };
-        let app_root = Path::new("/home/test/.local/share/io.github.clash-verge-rev.clash-verge-rev");
+        let app_root = Path::new("/home/test/.local/share/ltd.nexusvpn.client");
         let path = sidecar_ipc_path_for(app_root, &identity);
 
-        assert_eq!(path, app_root.join("verge-mihomo.sock"));
+        assert_eq!(path, app_root.join("nexus-mihomo.sock"));
         assert_ne!(
             path.to_string_lossy(),
             clash_verge_service_ipc::mihomo_ipc_path(&identity)
@@ -333,16 +333,15 @@ mod ipc_tests {
     #[test]
     fn sidecar_ipc_ignores_long_app_root_and_fits_sockaddr_un() -> anyhow::Result<()> {
         let identity = OwnerIdentity::Unix { uid: 501, gid: 20 };
-        let app_root =
-            Path::new("/Users/support/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev.dev");
+        let app_root = Path::new("/Users/support/Library/Application Support/ltd.nexusvpn.client.dev");
         let path = sidecar_ipc_path_for(app_root, &identity)?;
 
         assert!(!path.starts_with(app_root));
         assert!(path.as_os_str().as_bytes().len() < 104);
         #[cfg(feature = "verge-dev")]
-        assert_eq!(path.file_name(), Some(OsStr::new("verge-mihomo-dev.sock")));
+        assert_eq!(path.file_name(), Some(OsStr::new("nexus-mihomo-dev.sock")));
         #[cfg(not(feature = "verge-dev"))]
-        assert_eq!(path.file_name(), Some(OsStr::new("verge-mihomo.sock")));
+        assert_eq!(path.file_name(), Some(OsStr::new("nexus-mihomo.sock")));
         assert_eq!(path, sidecar_ipc_path_for(Path::new("/different/root"), &identity)?);
         assert!(path.parent().is_some_and(Path::is_dir));
         Ok(())
@@ -365,7 +364,7 @@ mod ipc_tests {
         assert_eq!(
             path,
             Path::new(&format!(
-                r"\\.\pipe\verge-mihomo-sidecar-{}-{}",
+                r"\\.\pipe\nexus-mihomo-sidecar-{}-{}",
                 if cfg!(feature = "verge-dev") { "dev" } else { "release" },
                 clash_verge_service_ipc::owner_key(&identity)
             ))
@@ -403,11 +402,11 @@ mod windows_pipe_name_tests {
 
         assert_eq!(
             sidecar_pipe_name(&identity, false),
-            format!(r"\\.\pipe\verge-mihomo-sidecar-release-{owner_key}")
+            format!(r"\\.\pipe\nexus-mihomo-sidecar-release-{owner_key}")
         );
         assert_eq!(
             sidecar_pipe_name(&identity, true),
-            format!(r"\\.\pipe\verge-mihomo-sidecar-dev-{owner_key}")
+            format!(r"\\.\pipe\nexus-mihomo-sidecar-dev-{owner_key}")
         );
     }
 }

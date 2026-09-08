@@ -69,23 +69,9 @@ tray:
   rule: قانون
   direct: مستقیم
   global: سراسری
-  profiles: پروفایل‌ها
   proxies: پروکسی‌ها
   systemProxy: پروکسی سیستم
   tunMode: حالت TUN
-  closeAllConnections: بستن همه اتصال‌ها
-  lightweightMode: حالت سبک
-  copyEnv: کپی متغیرهای محیطی
-  confDir: پوشه پیکربندی
-  coreDir: پوشه هسته
-  logsDir: پوشه گزارش‌ها
-  openDir: باز کردن پوشه
-  appLog: گزارش برنامه
-  coreLog: گزارش هسته
-  restartClash: راه‌اندازی مجدد هسته Clash
-  restartApp: راه‌اندازی مجدد برنامه
-  vergeVersion: نسخه Verge
-  more: بیشتر
   exit: خروج
   tooltip:
     systemProxy: پروکسی سیستم

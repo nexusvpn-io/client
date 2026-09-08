@@ -1,13 +1,11 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { access, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-export const developmentServiceDirectoryEnvironment =
-  'CLASH_VERGE_DEV_SERVICE_DIR'
-const developmentServiceInstallerEnvironment =
-  'CLASH_VERGE_DEV_SERVICE_INSTALLER'
+export const developmentServiceDirectoryEnvironment = 'NEXUS_DEV_SERVICE_DIR'
+const developmentServiceInstallerEnvironment = 'NEXUS_DEV_SERVICE_INSTALLER'
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = resolve(scriptDirectory, '..')
@@ -106,7 +104,7 @@ async function elevateInstaller(installer, platform) {
 
   if (platform === 'darwin') {
     const script =
-      'on run argv\nset toolPath to item 1 of argv\nset groupId to item 2 of argv\ndo shell script "CLASH_VERGE_SERVICE_GID=" & quoted form of groupId & " " & quoted form of toolPath with administrator privileges\nend run'
+      'on run argv\nset toolPath to item 1 of argv\nset groupId to item 2 of argv\ndo shell script "NEXUS_SERVICE_GID=" & quoted form of groupId & " " & quoted form of toolPath with administrator privileges\nend run'
     return run('osascript', ['-e', script, installer, String(process.getgid())])
   }
 
@@ -114,7 +112,7 @@ async function elevateInstaller(installer, platform) {
     return run(installer, [], {
       env: {
         ...process.env,
-        CLASH_VERGE_SERVICE_GID: String(process.getgid()),
+        NEXUS_SERVICE_GID: String(process.getgid()),
       },
     })
   }
@@ -139,8 +137,30 @@ export async function prepareDevelopmentService({
     '--bins',
   ])
 
-  const service = executable('clash-verge-service', platform)
+  const service = executable('nexus-service', platform)
   await access(service)
+  if (platform === 'linux') {
+    const host = {
+      x64: 'x86_64-unknown-linux-gnu',
+      arm64: 'aarch64-unknown-linux-gnu',
+      arm: 'armv7-unknown-linux-gnueabihf',
+      riscv64: 'riscv64gc-unknown-linux-gnu',
+      loong64: 'loongarch64-unknown-linux-gnu',
+    }[process.arch]
+    if (!host) throw new Error('Unable to determine the Rust host target')
+    const sidecarDirectory = join(repositoryRoot, 'src-tauri', 'sidecar')
+    await mkdir(sidecarDirectory, { recursive: true })
+    for (const name of [
+      'nexus-service',
+      'nexus-service-install',
+      'nexus-service-uninstall',
+    ]) {
+      await copyFile(
+        executable(name, platform),
+        join(sidecarDirectory, `${name}-${host}`),
+      )
+    }
+  }
   return dirname(service)
 }
 
@@ -150,13 +170,13 @@ export async function ensureDevelopmentService({
   const serviceDirectory = await prepareDevelopmentService({ platform })
   const service = join(
     serviceDirectory,
-    platform === 'win32' ? 'clash-verge-service.exe' : 'clash-verge-service',
+    platform === 'win32' ? 'nexus-service.exe' : 'nexus-service',
   )
   const installer = join(
     serviceDirectory,
     platform === 'win32'
-      ? 'clash-verge-service-install.exe'
-      : 'clash-verge-service-install',
+      ? 'nexus-service-install.exe'
+      : 'nexus-service-install',
   )
   const driver = join(
     serviceDirectory,

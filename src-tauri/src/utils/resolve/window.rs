@@ -81,7 +81,7 @@ pub async fn build_new_window() -> Result<WebviewWindow, String> {
         "main", /* the unique window label */
         tauri::WebviewUrl::App(start_page.into()),
     )
-    .title("Clash Verge")
+    .title("Nexus VPN")
     .center()
     .decorations(DEFAULT_DECORATIONS)
     .fullscreen(false)
@@ -101,6 +101,12 @@ pub async fn build_new_window() -> Result<WebviewWindow, String> {
 
     if let Some(theme) = resolved_theme {
         builder = builder.theme(Some(theme));
+    }
+
+    // Programmatically created windows do not reliably inherit the bundle icon
+    // in Linux development builds, so apply the generated Nexus icon explicitly.
+    if let Some(icon) = app_handle.default_window_icon() {
+        builder = builder.icon(icon.clone()).map_err(|e| e.to_string())?;
     }
 
     builder = builder.background_color(background_color);

@@ -4,13 +4,12 @@ import { ResizeObserver } from '@juggle/resize-observer'
 import { ComposeContextProvider } from 'foxact/compose-context-provider'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
-import { RouterProvider } from 'react-router'
 import { SWRConfig } from 'swr'
 import { MihomoWebSocket } from 'tauri-plugin-mihomo-api'
 
 import { BaseErrorBoundary } from './components/base'
-import { router } from './pages/_routers'
-import { preloadHomePageCards } from './pages/home'
+import NexusApp from './nexus/nexus-app'
+import { hideInitialOverlay } from './pages/_layout/utils'
 import { AppDataProvider } from './providers/app-data-provider'
 import { WindowProvider } from './providers/window'
 import { FALLBACK_LANGUAGE, initializeLanguage } from './services/i18n'
@@ -55,7 +54,7 @@ const initializeApp = (initialThemeMode: 'light' | 'dark') => {
           <SWRConfig value={swrConfig}>
             <WindowProvider>
               <AppDataProvider>
-                <RouterProvider router={router} />
+                <NexusApp />
               </AppDataProvider>
             </WindowProvider>
           </SWRConfig>
@@ -63,12 +62,14 @@ const initializeApp = (initialThemeMode: 'light' | 'dark') => {
       </ComposeContextProvider>
     </React.StrictMode>,
   )
+
+  // The original layout hides the static startup overlay after mounting.
+  // Nexus replaces that layout, so it must dismiss the overlay itself.
+  window.requestAnimationFrame(() => hideInitialOverlay())
 }
 
 const bootstrap = async () => {
   const appDataPromise = preloadAppData()
-  void preloadHomePageCards()
-
   const { initialThemeMode } = await appDataPromise
   initializeApp(initialThemeMode)
 }

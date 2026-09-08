@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, MixedPort},
-    core::{CoreManager, handle, tray},
+    core::{handle, tray},
     feat::clean_async,
     process::AsyncHandler,
     utils,
@@ -22,19 +22,6 @@ static TLS_CONFIG: Lazy<Arc<rustls::ClientConfig>> = Lazy::new(|| {
         .with_no_client_auth();
     Arc::new(config)
 });
-
-pub async fn restart_clash_core() {
-    match CoreManager::global().restart_core().await {
-        Ok(_) => {
-            handle::Handle::refresh_clash();
-            handle::Handle::notice_message("set_config::ok", "ok");
-        }
-        Err(err) => {
-            handle::Handle::notice_message("set_config::error", format!("{err:#}"));
-            logging!(error, Type::Core, "{err:#}");
-        }
-    }
-}
 
 pub async fn restart_app() {
     logging!(debug, Type::System, "启动重启应用流程");

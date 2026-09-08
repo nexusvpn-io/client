@@ -39,7 +39,7 @@ pub(super) async fn resolve_scheme(param: &str) -> Result<()> {
 }
 
 fn extract_subscription_info(link_parsed: &Url) -> Option<(std::string::String, Option<String>)> {
-    if !matches!(link_parsed.scheme(), "clash" | "clash-verge") {
+    if link_parsed.scheme() != "nexusvpn" {
         return None;
     }
 
@@ -52,11 +52,10 @@ fn extract_subscription_info(link_parsed: &Url) -> Option<(std::string::String, 
 }
 
 fn extract_subscription_url(link_parsed: &Url) -> Option<std::string::String> {
-    let query = link_parsed.query()?;
-    let prefix = "url=";
-    let pos = query.find(prefix)?;
-    let raw_url = query[pos + prefix.len()..].trim();
-    Some(decode_subscription_url(raw_url))
+    link_parsed
+        .query_pairs()
+        .find(|(key, _)| key == "url")
+        .map(|(_, value)| decode_subscription_url(value.as_ref()))
 }
 
 fn decode_subscription_url(raw_url: &str) -> std::string::String {
@@ -155,5 +154,30 @@ async fn refresh_core_config() {
             logging!(error, Type::Config, "Apply config error: {}", err);
             handle::Handle::notice_message("update_failed", format!("{err}"));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_subscription_info;
+    use tauri::Url;
+
+    #[test]
+    fn nexus_link_extracts_url_and_name_in_any_order() {
+        let link =
+            Url::parse("nexusvpn://install?name=Nexus%20Team&url=https%3A%2F%2Fexample.com%2Fsub%3Ftoken%3Dsecret")
+                .unwrap();
+
+        let (url, name) = extract_subscription_info(&link).unwrap();
+
+        assert_eq!(url, "https://example.com/sub?token=secret");
+        assert_eq!(name.as_deref(), Some("Nexus Team"));
+    }
+
+    #[test]
+    fn upstream_clash_links_are_not_claimed() {
+        let link = Url::parse("clash://install?url=https%3A%2F%2Fexample.com%2Fsub").unwrap();
+
+        assert!(extract_subscription_info(&link).is_none());
     }
 }

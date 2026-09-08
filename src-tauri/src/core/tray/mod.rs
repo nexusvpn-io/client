@@ -1,16 +1,10 @@
-use crate::config::{IProfilePreview, IVerge};
+use crate::config::IVerge;
 use crate::core::tray::menu_def::TrayAction;
 use crate::module::lightweight;
 use crate::process::AsyncHandler;
 use crate::singleton;
 use crate::utils::window_manager::WindowManager;
-use crate::{
-    Type, cmd,
-    config::Config,
-    feat, logging,
-    module::lightweight::is_in_lightweight_mode,
-    utils::{dirs::find_target_icons, help},
-};
+use crate::{Type, config::Config, feat, logging, utils::dirs::find_target_icons};
 use clash_verge_limiter::{Limiter, SystemClock, SystemLimiter};
 use clash_verge_logging::logging_error;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
@@ -38,11 +32,10 @@ use menu_def::{MenuIds, MenuTexts};
 type ProxyMenuItem = (Option<Submenu<Wry>>, Vec<Box<dyn IsMenuItem<Wry>>>);
 
 const TRAY_CLICK_DEBOUNCE_MS: u64 = 300;
-pub const TRAY_ID: &str = "clash-verge-rev-tray";
+pub const TRAY_ID: &str = "nexus-vpn-tray";
 
 #[derive(Clone, Copy)]
 struct TrayMenuOptions {
-    is_lightweight_mode: bool,
     include_proxy_groups: bool,
 }
 
@@ -214,11 +207,6 @@ impl Tray {
                 .unwrap_or("rule")
                 .to_owned()
         };
-        let profiles_config = Config::profiles().await;
-        let profiles_arc = profiles_config.latest_arc();
-        let profiles_preview = profiles_arc.profiles_preview().unwrap_or_default();
-        let is_lightweight_mode = is_in_lightweight_mode();
-
         logging_error!(
             Type::Tray,
             tray.set_menu(Some(
@@ -228,11 +216,7 @@ impl Tray {
                     *system_proxy,
                     *tun_mode,
                     tun_mode_available,
-                    profiles_preview,
-                    TrayMenuOptions {
-                        is_lightweight_mode,
-                        include_proxy_groups,
-                    },
+                    TrayMenuOptions { include_proxy_groups },
                 )
                 .await?,
             ))
@@ -315,7 +299,7 @@ impl Tray {
         );
 
         let tooltip = format!(
-            "Clash Verge {}\n{}: {}\n{}: {}\n{}: {}",
+            "Nexus VPN {}\n{}: {}\n{}: {}\n{}: {}",
             reassembled_version,
             sys_proxy_text,
             switch_str(system_proxy),
@@ -435,26 +419,6 @@ fn create_hotkeys(hotkeys: &Option<Vec<String>>) -> HashMap<&str, &str> {
                 .collect::<HashMap<&str, &str>>()
         })
         .unwrap_or_default()
-}
-
-fn create_profile_menu_item(
-    app_handle: &AppHandle,
-    profiles_preview: Vec<IProfilePreview<'_>>,
-) -> Result<Vec<CheckMenuItem<Wry>>> {
-    profiles_preview
-        .into_iter()
-        .map(|profile| {
-            CheckMenuItem::with_id(
-                app_handle,
-                format!("profiles_{}", profile.uid),
-                profile.name,
-                true,
-                profile.is_current,
-                None::<&str>,
-            )
-            .map_err(|e| e.into())
-        })
-        .collect()
 }
 
 fn create_subcreate_proxy_menu_item(
@@ -591,7 +555,6 @@ async fn create_tray_menu(
     system_proxy_enabled: bool,
     tun_mode_enabled: bool,
     tun_mode_available: bool,
-    profiles_preview: Vec<IProfilePreview<'_>>,
     options: TrayMenuOptions,
 ) -> Result<tauri::menu::Menu<Wry>> {
     let current_proxy_mode = mode.unwrap_or("");
@@ -643,17 +606,9 @@ async fn create_tray_menu(
 
     let show_outbound_modes_inline = verge_settings.tray_inline_outbound_modes.unwrap_or(false);
 
-    let version = env!("CARGO_PKG_VERSION");
-
     let hotkeys = create_hotkeys(&verge_settings.hotkeys);
 
-    let profile_menu_items: Vec<CheckMenuItem<Wry>> = create_profile_menu_item(app_handle, profiles_preview)?;
-
     let texts = MenuTexts::new();
-    let profile_menu_items_refs: Vec<&dyn IsMenuItem<Wry>> = profile_menu_items
-        .iter()
-        .map(|item| item as &dyn IsMenuItem<Wry>)
-        .collect();
 
     let open_window = &MenuItem::with_id(
         app_handle,
@@ -712,14 +667,6 @@ async fn create_tray_menu(
         )?)
     };
 
-    let profiles = &Submenu::with_id_and_items(
-        app_handle,
-        MenuIds::PROFILES,
-        &texts.profiles,
-        true,
-        &profile_menu_items_refs,
-    )?;
-
     let (proxies_menu, inline_proxy_items) = if include_proxy_groups {
         let proxy_sub_menus =
             create_subcreate_proxy_menu_item(app_handle, current_proxy_mode, proxy_group_order_map, proxy_nodes_data);
@@ -751,75 +698,6 @@ async fn create_tray_menu(
         hotkeys.get("toggle_tun_mode").copied(),
     )?;
 
-    let close_all_connections = &MenuItem::with_id(
-        app_handle,
-        MenuIds::CLOSE_ALL_CONNECTIONS,
-        &texts.close_all_connections,
-        true,
-        None::<&str>,
-    )?;
-
-    let lightweight_mode = &CheckMenuItem::with_id(
-        app_handle,
-        MenuIds::LIGHTWEIGHT_MODE,
-        &texts.lightweight_mode,
-        true,
-        options.is_lightweight_mode,
-        hotkeys.get("entry_lightweight_mode").copied(),
-    )?;
-
-    let copy_env = &MenuItem::with_id(app_handle, MenuIds::COPY_ENV, &texts.copy_env, true, None::<&str>)?;
-
-    let open_app_dir = &MenuItem::with_id(app_handle, MenuIds::CONF_DIR, &texts.conf_dir, true, None::<&str>)?;
-
-    let open_core_dir = &MenuItem::with_id(app_handle, MenuIds::CORE_DIR, &texts.core_dir, true, None::<&str>)?;
-
-    let open_logs_dir = &MenuItem::with_id(app_handle, MenuIds::LOGS_DIR, &texts.logs_dir, true, None::<&str>)?;
-
-    let open_app_log = &MenuItem::with_id(app_handle, MenuIds::APP_LOG, &texts.app_log, true, None::<&str>)?;
-
-    let open_core_log = &MenuItem::with_id(app_handle, MenuIds::CORE_LOG, &texts.core_log, true, None::<&str>)?;
-
-    let open_dir = &Submenu::with_id_and_items(
-        app_handle,
-        MenuIds::OPEN_DIR,
-        &texts.open_dir,
-        true,
-        &[open_app_dir, open_core_dir, open_logs_dir, open_app_log, open_core_log],
-    )?;
-
-    let restart_clash = &MenuItem::with_id(
-        app_handle,
-        MenuIds::RESTART_CLASH,
-        &texts.restart_clash,
-        true,
-        None::<&str>,
-    )?;
-
-    let restart_app = &MenuItem::with_id(app_handle, MenuIds::RESTART_APP, &texts.restart_app, true, None::<&str>)?;
-
-    let app_version = &MenuItem::with_id(
-        app_handle,
-        MenuIds::VERGE_VERSION,
-        format!("{} {version}", texts.verge_version),
-        true,
-        None::<&str>,
-    )?;
-
-    let more = &Submenu::with_id_and_items(
-        app_handle,
-        MenuIds::MORE,
-        &texts.more,
-        true,
-        &[
-            copy_env as &dyn IsMenuItem<Wry>,
-            close_all_connections,
-            restart_clash,
-            restart_app,
-            app_version,
-        ],
-    )?;
-
     let quit_accelerator = hotkeys.get("quit").copied();
 
     #[cfg(target_os = "macos")]
@@ -841,13 +719,15 @@ async fn create_tray_menu(
         menu_items.push(outbound_modes);
     }
 
-    menu_items.extend_from_slice(&[separator, profiles]);
-
     match tray_proxy_groups_display_mode {
         "default" => {
+            if proxies_menu.is_some() {
+                menu_items.push(separator);
+            }
             menu_items.extend(proxies_menu.iter().map(|item| item as &dyn IsMenuItem<_>));
         }
         "inline" if !inline_proxy_items.is_empty() => {
+            menu_items.push(separator);
             menu_items.extend(inline_proxy_items.iter().map(|item| item.as_ref()));
         }
         _ => {}
@@ -857,10 +737,6 @@ async fn create_tray_menu(
         separator,
         system_proxy as &dyn IsMenuItem<Wry>,
         tun_mode as &dyn IsMenuItem<Wry>,
-        separator,
-        lightweight_mode as &dyn IsMenuItem<Wry>,
-        open_dir as &dyn IsMenuItem<Wry>,
-        more as &dyn IsMenuItem<Wry>,
         separator,
         quit as &dyn IsMenuItem<Wry>,
     ]);
@@ -945,45 +821,8 @@ fn on_menu_event(_: &AppHandle, event: MenuEvent) {
             MenuIds::TUN_MODE => {
                 feat::toggle_tun_mode(None).await;
             }
-            MenuIds::CLOSE_ALL_CONNECTIONS => {
-                if let Err(err) = handle::Handle::mihomo().close_all_connections().await {
-                    logging!(error, Type::Tray, "Failed to close all connections from tray: {err}");
-                }
-            }
-            MenuIds::COPY_ENV => feat::copy_clash_env().await,
-            MenuIds::CONF_DIR => {
-                let _ = cmd::open_app_dir().await;
-            }
-            MenuIds::CORE_DIR => {
-                let _ = cmd::open_core_dir().await;
-            }
-            MenuIds::LOGS_DIR => {
-                let _ = cmd::open_logs_dir().await;
-            }
-            MenuIds::APP_LOG => {
-                let _ = help::open_app_latest_log();
-            }
-            MenuIds::CORE_LOG => {
-                let _ = help::open_core_latest_log().await;
-            }
-            MenuIds::RESTART_CLASH => feat::restart_clash_core().await,
-            MenuIds::RESTART_APP => feat::restart_app().await,
-            MenuIds::LIGHTWEIGHT_MODE => {
-                if !is_in_lightweight_mode() {
-                    lightweight::entry_lightweight_mode().await;
-                } else {
-                    lightweight::exit_lightweight_mode().await;
-                }
-            }
             MenuIds::EXIT => {
                 feat::quit().await;
-            }
-            id if id.starts_with("profiles_") => {
-                let profile_index = match id.strip_prefix("profiles_") {
-                    Some(index_str) => index_str,
-                    None => return,
-                };
-                feat::toggle_proxy_profile(profile_index.into()).await;
             }
             id if id.starts_with("proxy_") => {
                 let rest = match id.strip_prefix("proxy_") {

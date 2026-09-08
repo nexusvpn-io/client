@@ -475,18 +475,18 @@ fn shell_single_quote(value: &str) -> String {
 #[cfg(any(target_os = "macos", test))]
 fn macos_install_shell(install_path: &Path, gid: u32) -> String {
     let install_quoted = shell_single_quote(&install_path.to_string_lossy());
-    format!("cd /; CLASH_VERGE_SERVICE_GID={gid} {install_quoted}")
+    format!("cd /; NEXUS_SERVICE_GID={gid} {install_quoted}")
 }
 
 fn packaged_service_tool_path(file_name: &str, packaged_path: impl FnOnce() -> Result<PathBuf>) -> Result<PathBuf> {
     #[cfg(feature = "verge-dev")]
     {
         drop(packaged_path);
-        let directory = std::env::var_os("CLASH_VERGE_DEV_SERVICE_DIR")
-            .context("CLASH_VERGE_DEV_SERVICE_DIR is missing from the development session")?;
+        let directory = std::env::var_os("NEXUS_DEV_SERVICE_DIR")
+            .context("NEXUS_DEV_SERVICE_DIR is missing from the development session")?;
         let directory = PathBuf::from(directory);
         if !directory.is_absolute() {
-            bail!("CLASH_VERGE_DEV_SERVICE_DIR must be an absolute path");
+            bail!("NEXUS_DEV_SERVICE_DIR must be an absolute path");
         }
         Ok(directory.join(file_name))
     }
@@ -506,8 +506,8 @@ fn uninstall_service() -> Result<()> {
     use runas::Command as RunasCommand;
     use std::os::windows::process::CommandExt as _;
 
-    let uninstall_path = packaged_service_tool_path("clash-verge-service-uninstall.exe", || {
-        Ok(dirs::service_path()?.with_file_name("clash-verge-service-uninstall.exe"))
+    let uninstall_path = packaged_service_tool_path("nexus-service-uninstall.exe", || {
+        Ok(dirs::service_path()?.with_file_name("nexus-service-uninstall.exe"))
     })?;
 
     if !uninstall_path.exists() {
@@ -540,8 +540,8 @@ fn install_service() -> Result<()> {
     use runas::Command as RunasCommand;
     use std::os::windows::process::CommandExt as _;
 
-    let install_path = packaged_service_tool_path("clash-verge-service-install.exe", || {
-        Ok(dirs::service_path()?.with_file_name("clash-verge-service-install.exe"))
+    let install_path = packaged_service_tool_path("nexus-service-install.exe", || {
+        Ok(dirs::service_path()?.with_file_name("nexus-service-install.exe"))
     })?;
 
     if !install_path.exists() {
@@ -583,8 +583,8 @@ fn install_service() -> Result<()> {
 fn uninstall_service() -> Result<()> {
     logging!(info, Type::Service, "uninstall service");
 
-    let uninstall_path = packaged_service_tool_path("clash-verge-service-uninstall", || {
-        Ok(tauri::utils::platform::current_exe()?.with_file_name("clash-verge-service-uninstall"))
+    let uninstall_path = packaged_service_tool_path("nexus-service-uninstall", || {
+        Ok(tauri::utils::platform::current_exe()?.with_file_name("nexus-service-uninstall"))
     })?;
 
     if !uninstall_path.exists() {
@@ -634,8 +634,8 @@ fn uninstall_service() -> Result<()> {
 fn install_service() -> Result<()> {
     logging!(info, Type::Service, "install service");
 
-    let install_path = packaged_service_tool_path("clash-verge-service-install", || {
-        Ok(tauri::utils::platform::current_exe()?.with_file_name("clash-verge-service-install"))
+    let install_path = packaged_service_tool_path("nexus-service-install", || {
+        Ok(tauri::utils::platform::current_exe()?.with_file_name("nexus-service-install"))
     })?;
 
     if !install_path.exists() {
@@ -691,8 +691,8 @@ fn linux_running_as_root() -> bool {
 fn uninstall_service() -> Result<()> {
     logging!(info, Type::Service, "uninstall service");
 
-    let uninstall_path = packaged_service_tool_path("clash-verge-service-uninstall", || {
-        Ok(dirs::service_path()?.with_file_name("clash-verge-service-uninstall"))
+    let uninstall_path = packaged_service_tool_path("nexus-service-uninstall", || {
+        Ok(dirs::service_path()?.with_file_name("nexus-service-uninstall"))
     })?;
 
     if !uninstall_path.exists() {
@@ -729,9 +729,9 @@ fn uninstall_service() -> Result<()> {
 fn install_service() -> Result<()> {
     logging!(info, Type::Service, "install service");
 
-    let binary_path = packaged_service_tool_path("clash-verge-service", dirs::service_path)?;
-    let install_path = packaged_service_tool_path("clash-verge-service-install", || {
-        Ok(dirs::service_path()?.with_file_name("clash-verge-service-install"))
+    let binary_path = packaged_service_tool_path("nexus-service", dirs::service_path)?;
+    let install_path = packaged_service_tool_path("nexus-service-install", || {
+        Ok(dirs::service_path()?.with_file_name("nexus-service-install"))
     })?;
 
     if !install_path.exists() {
@@ -837,7 +837,7 @@ pub(super) async fn stage_runtime_by_service(config_file: &Path) -> Result<Stage
 
     let response = clash_verge_service_ipc::stage_runtime(&credentials, &session, &runtime)
         .await
-        .context("无法连接到Clash Verge Service")?;
+        .context("无法连接到 Nexus VPN Service")?;
     if response.code > 0 {
         return Ok(StageRequest::Refused {
             code: response.code,
@@ -847,7 +847,7 @@ pub(super) async fn stage_runtime_by_service(config_file: &Path) -> Result<Stage
     response
         .data
         .map(StageRequest::Answered)
-        .context("Clash Verge Service 未返回运行时暂存结果")
+        .context("Nexus VPN Service 未返回运行时暂存结果")
 }
 
 /// 尝试使用服务启动core
@@ -868,7 +868,7 @@ pub(super) async fn start_with_existing_service(config_file: &Path) -> Result<()
         Ok(response) => response,
         Err(error) => {
             start_owner_monitor();
-            return Err(error).context("无法连接到Clash Verge Service");
+            return Err(error).context("无法连接到 Nexus VPN Service");
         }
     };
 
@@ -882,7 +882,7 @@ pub(super) async fn start_with_existing_service(config_file: &Path) -> Result<()
         );
     }
 
-    let result = response.data.context("Clash Verge Service 未返回会话信息")?;
+    let result = response.data.context("Nexus VPN Service 未返回会话信息")?;
     let supports_runtime_staging = probe_runtime_staging_support().await;
     *ACTIVE_SERVICE_SESSION.lock() = Some(ActiveServiceSession {
         proof: OwnerSessionProof {
@@ -930,7 +930,7 @@ pub(super) async fn get_clash_logs_by_service() -> Result<Vec<CompactString>> {
         clash_verge_service_ipc::get_clash_logs(&credentials)
     })
     .await;
-    let response = response.context("无法连接到Clash Verge Service")?;
+    let response = response.context("无法连接到 Nexus VPN Service")?;
 
     if response.code > 0 {
         if response.code == clash_verge_service_ipc::ServiceErrorCode::NotActive as u16 {
@@ -951,7 +951,7 @@ pub(crate) async fn get_clash_log_snapshot_by_service() -> Result<String> {
         clash_verge_service_ipc::get_clash_log_snapshot(&credentials)
     })
     .await;
-    let response = response.context("无法连接到Clash Verge Service")?;
+    let response = response.context("无法连接到 Nexus VPN Service")?;
     if response.code > 0 {
         if response.code == clash_verge_service_ipc::ServiceErrorCode::NotActive as u16 {
             recover_after_owner_loss(generation, OwnerRecoveryReason::Displaced).await;
@@ -992,7 +992,7 @@ pub(super) async fn stop_core_by_service() -> Result<()> {
         Ok(response) => response,
         Err(error) => {
             start_owner_monitor();
-            return Err(error).context("无法连接到Clash Verge Service");
+            return Err(error).context("无法连接到 Nexus VPN Service");
         }
     };
 
@@ -1021,7 +1021,7 @@ pub(crate) async fn update_writer_by_service(writer: &WriterConfig) -> Result<()
     let session = active_service_session()?;
     let response = clash_verge_service_ipc::update_writer(&credentials, &session, writer)
         .await
-        .context("无法连接到Clash Verge Service")?;
+        .context("无法连接到 Nexus VPN Service")?;
     if response.code > 0 {
         bail!(response.message);
     }
@@ -1040,11 +1040,11 @@ pub(super) async fn set_system_proxy_by_service_with_session(
     let credentials = current_owner_credentials()?;
     let response = clash_verge_service_ipc::set_system_proxy(&credentials, session, proxy)
         .await
-        .context("无法连接到Clash Verge Service")?;
+        .context("无法连接到 Nexus VPN Service")?;
     if response.code > 0 {
         bail!(response.message);
     }
-    response.data.context("Clash Verge Service 未返回系统代理结果")
+    response.data.context("Nexus VPN Service 未返回系统代理结果")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1572,14 +1572,14 @@ mod tests {
 
         let root = TestDirectory::new("development-service-tool")?;
         let home = root.path().join("home");
-        let source = root.path().join("clash-verge-service-install");
+        let source = root.path().join("nexus-service-install");
         std::fs::write(&source, b"development installer")?;
 
         let selected = service_tool_path_for(&source, Some(&home), true)?;
 
         assert_eq!(
             selected,
-            service_tools_staging_directory(&home).join("clash-verge-service-install")
+            service_tools_staging_directory(&home).join("nexus-service-install")
         );
         assert_eq!(std::fs::read(&selected)?, b"development installer");
         assert_ne!(std::fs::metadata(&selected)?.permissions().mode() & 0o111, 0);
@@ -1588,11 +1588,11 @@ mod tests {
 
     #[test]
     fn macos_install_shell_starts_from_root_without_nested_sudo() {
-        let shell = macos_install_shell(Path::new("/safe/service-tools/clash-verge-service-install"), 20);
+        let shell = macos_install_shell(Path::new("/safe/service-tools/nexus-service-install"), 20);
 
         assert_eq!(
             shell,
-            "cd /; CLASH_VERGE_SERVICE_GID=20 '/safe/service-tools/clash-verge-service-install'"
+            "cd /; NEXUS_SERVICE_GID=20 '/safe/service-tools/nexus-service-install'"
         );
         assert!(!shell.contains("sudo"));
     }
@@ -1833,7 +1833,7 @@ mod tests {
         assert!(
             !super::macos_service_install_markers()
                 .iter()
-                .any(|marker| marker == "/tmp/verge/clash-verge-service.sock")
+                .any(|marker| marker == "/tmp/verge/nexus-service.sock")
         );
     }
 

@@ -1,12 +1,11 @@
 #!/bin/bash
-/usr/bin/clash-verge-service-uninstall
+/usr/bin/nexus-service-uninstall
 
 . /etc/os-release
 
 if [ "$ID" = "deepin" ]; then
-    if [ -f "/usr/share/applications/clash-verge.desktop" ]; then
+    if [ -f "/usr/share/applications/nexus-vpn.desktop" ]; then
         echo "Removing deepin desktop file"
-        rm -vf "/usr/share/applications/clash-verge.desktop"
+        rm -vf "/usr/share/applications/nexus-vpn.desktop"
     fi
 fi
-

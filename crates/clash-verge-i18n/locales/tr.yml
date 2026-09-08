@@ -69,23 +69,9 @@ tray:
   rule: Kural
   direct: Doğrudan
   global: Küresel
-  profiles: Profiller
   proxies: Vekil'ler
   systemProxy: Sistem Vekil'i
   tunMode: TUN Modu
-  closeAllConnections: Tüm Bağlantıları Kapat
-  lightweightMode: Hafif Mod
-  copyEnv: Ortam Değişkenlerini Kopyala
-  confDir: Yapılandırma Dizini
-  coreDir: Çekirdek Dizini
-  logsDir: Günlük Dizini
-  openDir: Dizini Aç
-  appLog: Uygulama Günlüğü
-  coreLog: Çekirdek Günlüğü
-  restartClash: Clash Çekirdeğini Yeniden Başlat
-  restartApp: Uygulamayı Yeniden Başlat
-  vergeVersion: Verge Sürümü
-  more: Daha Fazla
   exit: Çıkış
   tooltip:
     systemProxy: Sistem Vekil'i

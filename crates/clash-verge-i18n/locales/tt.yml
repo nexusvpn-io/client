@@ -69,23 +69,9 @@ tray:
   rule: Кагыйдә
   direct: Турыдан-туры
   global: Глобаль
-  profiles: Профильләр
   proxies: Проксилар
   systemProxy: Системалы прокси
   tunMode: TUN режимы
-  closeAllConnections: Барлык тоташуларны ябу
-  lightweightMode: Җиңел режим
-  copyEnv: Мохит үзгәрүчәннәрен күчерү
-  confDir: Конфигурация каталогы
-  coreDir: Ядро каталогы
-  logsDir: Журнал каталогы
-  openDir: Каталогны ачу
-  appLog: Кушымта журналы
-  coreLog: Ядро журналы
-  restartClash: Clash ядрәсен кабат җибәрү
-  restartApp: Кушымтаны кабат җибәрү
-  vergeVersion: Verge версиясе
-  more: Күбрәк
   exit: Чыгу
   tooltip:
     systemProxy: Системалы прокси

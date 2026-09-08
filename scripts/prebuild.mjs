@@ -10,7 +10,6 @@ import { glob } from 'glob'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import { extract } from 'tar'
 
-import { resolveServiceRelease } from './service-release.mjs'
 import { log_debug, log_error, log_info, log_success } from './utils.mjs'
 
 /** Prepares platform resources, caching versions and unchanged files unless `--force` is used. */
@@ -511,9 +510,9 @@ const resolvePlugin = async () => {
 // Service executable permissions
 const resolveServicePermission = async () => {
   const serviceExecutables = [
-    'clash-verge-service*',
-    'clash-verge-service-install*',
-    'clash-verge-service-uninstall*',
+    'nexus-service*',
+    'nexus-service-install*',
+    'nexus-service-uninstall*',
   ]
   const hashCache = await loadHashCache()
   let hasChanges = false
@@ -546,9 +545,9 @@ const resolveServicePermission = async () => {
 
 // Other resources
 const SERVICE_BINARIES = [
-  'clash-verge-service',
-  'clash-verge-service-install',
-  'clash-verge-service-uninstall',
+  'nexus-service',
+  'nexus-service-install',
+  'nexus-service-uninstall',
 ]
 
 function serviceFileInfo(name) {
@@ -560,19 +559,6 @@ function serviceFileInfo(name) {
   }
 }
 
-async function findExtractedFile(dir, fileName) {
-  const entries = await fsp.readdir(dir, { withFileTypes: true })
-  for (const entry of entries) {
-    const entryPath = path.join(dir, entry.name)
-    if (entry.isFile() && entry.name === fileName) return entryPath
-    if (entry.isDirectory()) {
-      const found = await findExtractedFile(entryPath, fileName)
-      if (found) return found
-    }
-  }
-  return null
-}
-
 async function resolveServiceBundle() {
   const files = SERVICE_BINARIES.map((name) => {
     const info = serviceFileInfo(name)
@@ -582,51 +568,48 @@ async function resolveServiceBundle() {
     }
   })
 
-  const cargoManifest = await fsp.readFile(
-    path.join(cwd, 'src-tauri', 'Cargo.toml'),
-    'utf8',
-  )
-  const { archiveFile, downloadURL } = resolveServiceRelease(
-    cargoManifest,
-    SIDECAR_HOST,
-    platform,
-  )
-  const tempDir = path.join(TEMP_DIR, 'clash-verge-service-ipc')
-  const tempArchive = path.join(tempDir, archiveFile)
+  const serviceRepository = path.resolve(cwd, '..', 'clash-verge-service-ipc')
+  const serviceManifest = path.join(serviceRepository, 'Cargo.toml')
+  if (!fs.existsSync(serviceManifest)) {
+    throw new Error(
+      `Nexus service fork is required at ${serviceRepository}; upstream Clash service artifacts are intentionally not used`,
+    )
+  }
 
-  await fsp.mkdir(tempDir, { recursive: true })
+  const cargoArgs = [
+    'build',
+    '--release',
+    '--manifest-path',
+    serviceManifest,
+    '--features',
+    'standalone,client',
+    '--bins',
+  ]
+  if (target) cargoArgs.push('--target', SIDECAR_HOST)
+  execFileSync('cargo', cargoArgs, {
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      CARGO_BUILD_JOBS: process.env.CARGO_BUILD_JOBS || '1',
+    },
+  })
+
+  const outputDirectory = target
+    ? path.join(serviceRepository, 'target', SIDECAR_HOST, 'release')
+    : path.join(serviceRepository, 'target', 'release')
   await fsp.mkdir(SERVICE_DIR, { recursive: true })
 
-  try {
-    await downloadFile(downloadURL, tempArchive)
-
-    if (platform === 'win32') {
-      const zip = new AdmZip(tempArchive)
-      zip
-        .getEntries()
-        .forEach((entry) =>
-          log_debug('"clash-verge-service-ipc" entry:', entry.entryName),
-        )
-      zip.extractAllTo(tempDir, true)
-    } else {
-      await extract({ cwd: tempDir, file: tempArchive })
+  for (const { sourceFile, targetFile, targetPath } of files) {
+    const builtFile = path.join(outputDirectory, sourceFile)
+    if (!fs.existsSync(builtFile)) {
+      throw new Error(
+        `Expected Nexus service binary ${builtFile} was not built`,
+      )
     }
-
-    for (const { sourceFile, targetFile, targetPath } of files) {
-      const extractedFile = await findExtractedFile(tempDir, sourceFile)
-      if (!extractedFile) {
-        throw new Error(`Expected binary ${sourceFile} not found in archive`)
-      }
-
-      await fsp.copyFile(extractedFile, targetPath)
-      if (platform !== 'win32') await fsp.chmod(targetPath, 0o755)
-      await updateHashCache(targetPath)
-      log_success(`Extracted service file: ${targetFile}`)
-    }
-
-    log_success(`service bundle finished: ${archiveFile}`)
-  } finally {
-    await fsp.rm(tempDir, { recursive: true, force: true })
+    await fsp.copyFile(builtFile, targetPath)
+    if (platform !== 'win32') await fsp.chmod(targetPath, 0o755)
+    await updateHashCache(targetPath)
+    log_success(`Prepared Nexus service file: ${targetFile}`)
   }
 }
 

@@ -1,20 +1,11 @@
 use crate::{
-    cmd,
     config::{Config, PrfItem, PrfOption, profiles::profiles_update_item_safe},
     core::{CoreManager, handle, tray, validate::ValidationOutcome},
     utils::help::{mask_err, mask_url},
 };
 use anyhow::{Result, bail};
-use clash_verge_logging::{Type, logging, logging_error};
+use clash_verge_logging::{Type, logging};
 use smartstring::alias::String;
-
-/// Toggle proxy profile
-pub async fn toggle_proxy_profile(profile_index: String) {
-    logging_error!(
-        Type::Config,
-        cmd::patch_profiles_config_by_profile_index(profile_index).await
-    );
-}
 
 /// Tell the profile which node this group is on now.
 ///

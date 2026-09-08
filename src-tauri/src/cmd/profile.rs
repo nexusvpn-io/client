@@ -337,16 +337,6 @@ pub async fn patch_profiles_config(profiles: IProfiles) -> CmdResult<ValidationO
         .map_err(|error| coded_error("PROFILE_SWITCH_FAILED", error))
 }
 
-pub async fn patch_profiles_config_by_profile_index(profile_index: String) -> CmdResult<ValidationOutcome> {
-    logging!(info, Type::Cmd, "切换配置到: {}", profile_index);
-
-    let profiles = IProfiles {
-        current: Some(profile_index),
-        items: None,
-    };
-    patch_profiles_config(profiles).await
-}
-
 #[tauri::command]
 pub async fn patch_profile(index: String, profile: PrfItem) -> CmdResult {
     let profiles = Config::profiles().await;

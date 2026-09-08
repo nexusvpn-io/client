@@ -69,23 +69,9 @@ tray:
   rule: Rule
   direct: Direct
   global: Global
-  profiles: Profiles
   proxies: Proxies
   systemProxy: System Proxy
   tunMode: TUN Mode
-  closeAllConnections: Close All Connections
-  lightweightMode: Lightweight Mode
-  copyEnv: Copy Environment Variables
-  confDir: Configuration Directory
-  coreDir: Core Directory
-  logsDir: Log Directory
-  openDir: Open Directory
-  appLog: Application Log
-  coreLog: Core Log
-  restartClash: Restart Clash Core
-  restartApp: Restart Application
-  vergeVersion: Verge Version
-  more: More
   exit: Exit
   tooltip:
     systemProxy: System Proxy
