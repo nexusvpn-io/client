@@ -158,6 +158,7 @@ async fn refresh_core_config() {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, reason = "tests assert by panicking")]
 mod tests {
     use super::extract_subscription_info;
     use tauri::Url;
