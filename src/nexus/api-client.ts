@@ -1,6 +1,10 @@
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 
 export const AUTH_EXPIRED_EVENT = 'nexus:auth-expired'
+export const API_BASE_STORAGE_KEY = 'nexus.api-base-url'
+export const DEFAULT_API_BASE = (
+  import.meta.env.VITE_NEXUS_API_URL || 'https://web.nexusvpn.ltd/api'
+).replace(/\/$/, '')
 
 const notifyAuthExpired = () =>
   window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT))
@@ -53,9 +57,36 @@ export interface TrialState {
   service: TrialService | null
 }
 
-const API_BASE = (
-  import.meta.env.VITE_NEXUS_API_URL || 'https://web.nexusvpn.ltd/api'
-).replace(/\/$/, '')
+export const normalizeApiBaseUrl = (value: string): string => {
+  const url = new URL(value.trim())
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    throw new Error('API Host 仅支持 http:// 或 https://')
+  }
+  if (url.username || url.password || url.search || url.hash) {
+    throw new Error('API Host 不能包含账号、密码、查询参数或锚点')
+  }
+  return url.toString().replace(/\/$/, '')
+}
+
+export const getApiBaseUrl = (): string => {
+  const stored = localStorage.getItem(API_BASE_STORAGE_KEY)
+  if (!stored) return DEFAULT_API_BASE
+  try {
+    return normalizeApiBaseUrl(stored)
+  } catch {
+    localStorage.removeItem(API_BASE_STORAGE_KEY)
+    return DEFAULT_API_BASE
+  }
+}
+
+export const setApiBaseUrl = (value: string): string => {
+  const normalized = normalizeApiBaseUrl(value)
+  localStorage.setItem(API_BASE_STORAGE_KEY, normalized)
+  return normalized
+}
+
+export const resetApiBaseUrl = () =>
+  localStorage.removeItem(API_BASE_STORAGE_KEY)
 
 const request = async <T>(
   path: string,
@@ -67,7 +98,7 @@ const request = async <T>(
   if (init.body) headers.set('Content-Type', 'application/json')
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
-  const response = await tauriFetch(`${API_BASE}${path}`, {
+  const response = await tauriFetch(`${getApiBaseUrl()}${path}`, {
     ...init,
     headers,
   })
@@ -86,7 +117,7 @@ const request = async <T>(
 }
 
 const requestText = async (path: string, token: string): Promise<string> => {
-  const response = await tauriFetch(`${API_BASE}${path}`, {
+  const response = await tauriFetch(`${getApiBaseUrl()}${path}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'text/plain' },
   })
   if (response.status === 401) notifyAuthExpired()
@@ -97,7 +128,7 @@ const requestText = async (path: string, token: string): Promise<string> => {
   return response.text()
 }
 
-export const apiOrigin = new URL(API_BASE).origin
+export const getApiOrigin = () => new URL(getApiBaseUrl()).origin
 
 export const login = (email: string, password: string) =>
   request<AuthResponse>('/auth/login', {

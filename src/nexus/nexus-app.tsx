@@ -47,7 +47,7 @@ import parseTraffic from '@/utils/parse-traffic'
 
 import {
   AUTH_EXPIRED_EVENT,
-  apiOrigin,
+  getApiOrigin,
   getMyTeams,
   getTrialState,
   getTrialSubscription,
@@ -57,6 +57,8 @@ import {
   profile,
   register,
 } from './api-client'
+import { recordDeveloperClick } from './developer-mode'
+import { DeveloperSettingsDialog } from './developer-settings-dialog'
 import { cleanupNexusSession } from './session-cleanup'
 import './nexus.scss'
 
@@ -87,17 +89,30 @@ interface ServiceSummary {
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : '操作失败，请稍后重试'
 
-const NexusBrand = ({ inverted = false }: { inverted?: boolean }) => (
-  <div className="nexus-brand">
-    <img src={inverted ? nexusLogoWhite : nexusLogo} alt="Nexus VPN" />
-  </div>
+const NexusBrand = ({
+  inverted = false,
+  onClick,
+}: {
+  inverted?: boolean
+  onClick: () => void
+}) => (
+  <button
+    type="button"
+    className="nexus-brand"
+    aria-label="Nexus VPN"
+    onClick={onClick}
+  >
+    <img src={inverted ? nexusLogoWhite : nexusLogo} alt="" />
+  </button>
 )
 
 function AuthScreen({
   onAuthenticated,
+  onDeveloperClick,
   notice,
 }: {
   onAuthenticated: (session: Session) => void
+  onDeveloperClick: () => void
   notice?: string
 }) {
   const [mode, setMode] = useState<AuthMode>('login')
@@ -128,7 +143,7 @@ function AuthScreen({
   return (
     <main className="nexus-auth">
       <section className="nexus-auth__story">
-        <NexusBrand inverted />
+        <NexusBrand inverted onClick={onDeveloperClick} />
         <div className="nexus-auth__copy">
           <p className="nexus-kicker">PRIVATE NETWORK · SIMPLIFIED</p>
           <h1>
@@ -146,7 +161,7 @@ function AuthScreen({
 
       <section className="nexus-auth__panel">
         <div className="nexus-auth__mobile-brand">
-          <NexusBrand />
+          <NexusBrand onClick={onDeveloperClick} />
         </div>
         <form className="nexus-form" onSubmit={submit}>
           <div className="nexus-tabs" role="tablist">
@@ -224,9 +239,11 @@ function AuthScreen({
 function Dashboard({
   session,
   onLogout,
+  onDeveloperClick,
 }: {
   session: Session
   onLogout: () => void
+  onDeveloperClick: () => void
 }) {
   const pageVisible = useVisibility()
   const { profiles, mutateProfiles } = useProfiles()
@@ -351,7 +368,7 @@ function Dashboard({
           if (!config.data.subscriptionUrl) continue
           const subscriptionUrl = new URL(
             config.data.subscriptionUrl,
-            apiOrigin,
+            getApiOrigin(),
           )
           subscriptionUrl.searchParams.set('agent', 'clash-grouping')
           targetUrl = subscriptionUrl.toString()
@@ -619,7 +636,7 @@ function Dashboard({
   return (
     <main className="nexus-shell">
       <header className="nexus-topbar" data-tauri-drag-region>
-        <NexusBrand />
+        <NexusBrand onClick={onDeveloperClick} />
         <nav className="nexus-nav" aria-label="主导航">
           <button
             type="button"
@@ -880,7 +897,36 @@ export default function NexusApp() {
   const [session, setSession] = useState<Session | null>(null)
   const [checking, setChecking] = useState(Boolean(persistedToken))
   const [authNotice, setAuthNotice] = useState('')
+  const [developerUnlocked, setDeveloperUnlocked] = useState(false)
+  const [developerDialogOpen, setDeveloperDialogOpen] = useState(false)
+  const developerClicksRef = useRef({ count: 0, lastAt: 0 })
   const cleanupRef = useRef<Promise<void> | null>(null)
+
+  const handleDeveloperClick = useCallback(() => {
+    if (developerUnlocked) {
+      setDeveloperDialogOpen(true)
+      return
+    }
+
+    const clicks = developerClicksRef.current
+    if (!recordDeveloperClick(clicks)) return
+    setDeveloperUnlocked(true)
+    setDeveloperDialogOpen(true)
+  }, [developerUnlocked])
+
+  const handleApiChanged = useCallback(async (changed: boolean) => {
+    if (!changed) return
+    localStorage.removeItem(TOKEN_KEY)
+    setSession(null)
+    setChecking(false)
+    try {
+      await cleanupNexusSession()
+      setAuthNotice('API Host 已更新，请重新登录')
+    } catch (cause) {
+      console.error('[nexus] 切换 API Host 后的本地清理失败:', cause)
+      setAuthNotice('API Host 已更新；部分本地代理数据清理失败')
+    }
+  }, [])
 
   useEffect(() => {
     const expireSession = () => {
@@ -914,11 +960,12 @@ export default function NexusApp() {
 
   const content = checking ? (
     <div className="nexus-splash">
-      <NexusBrand inverted />
+      <NexusBrand inverted onClick={handleDeveloperClick} />
     </div>
   ) : !session ? (
     <AuthScreen
       notice={authNotice}
+      onDeveloperClick={handleDeveloperClick}
       onAuthenticated={(nextSession) => {
         setAuthNotice('')
         setSession(nextSession)
@@ -927,6 +974,7 @@ export default function NexusApp() {
   ) : (
     <Dashboard
       session={session}
+      onDeveloperClick={handleDeveloperClick}
       onLogout={() => {
         localStorage.removeItem(TOKEN_KEY)
         setSession(null)
@@ -941,6 +989,13 @@ export default function NexusApp() {
       </div>
       <WindowResizeHandles />
       {content}
+      {developerDialogOpen && (
+        <DeveloperSettingsDialog
+          open
+          onClose={() => setDeveloperDialogOpen(false)}
+          onApiChanged={handleApiChanged}
+        />
+      )}
       <SysproxyPrivilegeDialog />
     </>
   )
