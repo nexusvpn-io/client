@@ -139,12 +139,9 @@ jobs:
         env:
           NODE_OPTIONS: '--max_old_space_size=4096'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_CONFIG: '{"plugins":{"updater":{"pubkey":"${{ secrets.TAURI_SIGNING_PUBLIC_KEY }}"}}}'
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
           tauriScript: pnpm
-          args: --target ${{ matrix.target }} -b ${{ matrix.bundle }}
+          args: --target ${{ matrix.target }} -b ${{ matrix.bundle }} --no-sign
 
       - name: Upload Artifacts (macOS)
         if: matrix.os == 'macos-latest' && github.event.inputs[matrix.input] == 'true'
