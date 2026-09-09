@@ -1,6 +1,6 @@
 {
   "name": "nexus-vpn",
-  "version": "0.0.1",
+  "version": "0.0.2-rc.1",
   "license": "GPL-3.0-only",
   "scripts": {
     "prepare": "husky || true",

@@ -1,6 +1,6 @@
 [package]
 name = "nexus-vpn"
-version = "0.0.1"
+version = "0.0.2-rc.1"
 description = "Nexus VPN desktop client"
 authors = ["zzzgydi", "Tunglies", "wonfen", "MystiPanda"]
 license = "GPL-3.0-only"
