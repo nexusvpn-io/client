@@ -1,5 +1,5 @@
 import {
-  FormEvent,
+  type FormEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -31,7 +31,6 @@ import {
 } from '@/providers/app-data-context'
 import {
   createProfile,
-  deleteProfile,
   enhanceProfiles,
   getProfiles,
   importProfile,
@@ -41,6 +40,7 @@ import {
   saveProfileFile,
 } from '@/services/cmds'
 import delayManager from '@/services/delay'
+import { subscribeVergeEvents } from '@/services/events'
 import { requestService } from '@/services/service-request'
 import { isInteractableMember, resolveMember } from '@/types/proxy-view'
 import parseTraffic from '@/utils/parse-traffic'
@@ -53,10 +53,11 @@ import {
   getTrialSubscription,
   getVpnConfig,
   login,
-  NexusUser,
+  type NexusUser,
   profile,
   register,
 } from './api-client'
+import { cleanupNexusSession } from './session-cleanup'
 import './nexus.scss'
 
 const TOKEN_KEY = 'nexus.access-token'
@@ -236,11 +237,12 @@ function Dashboard({
   const { clashConfig } = useClashConfigData()
   const { proxyView } = useProxiesData()
   const { refreshClashConfig, refreshProxy } = useAppRefreshers()
-  const { changeProxy } = useProxySelection({
-    onSuccess: () => void refreshProxy(),
-  })
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const { changeProxy } = useProxySelection({
+    onSuccess: () => void refreshProxy(),
+    onError: (cause) => setMessage(`切换节点失败：${errorMessage(cause)}`),
+  })
   const [service, setService] = useState<ServiceSummary | null>(null)
   const [selectedGroupName, setSelectedGroupName] = useState('')
   const [testingDelay, setTestingDelay] = useState(false)
@@ -338,11 +340,13 @@ function Dashboard({
       let targetName = ''
       let summary: ServiceSummary | null = null
       for (const membership of teams.filter((team) => team.memberId)) {
+        const memberId = membership.memberId
+        if (!memberId) continue
         try {
           const config = await getVpnConfig(
             session.token,
             membership.id,
-            membership.memberId!,
+            memberId,
           )
           if (!config.data.subscriptionUrl) continue
           const subscriptionUrl = new URL(
@@ -453,17 +457,31 @@ function Dashboard({
     void syncService()
   }, [syncService])
 
+  useEffect(
+    () =>
+      subscribeVergeEvents({
+        'verge://notice-message': ([status, detail]) => {
+          const notices: Record<string, string> = {
+            'tun_mode::auto_disabled': '当前环境无法使用 TUN，已自动关闭',
+            'tun_mode::auto_disable_failed': 'TUN 无法使用，且自动关闭失败',
+            'set_config::error': '代理配置应用失败',
+            'reactivate_profiles::error': '代理配置重新加载失败',
+          }
+          const notice = detail || notices[status]
+          if (notice) setMessage(notice)
+        },
+      }),
+    [],
+  )
+
   const tunConnected = Boolean(verge?.enable_tun_mode && isTunModeAvailable)
-  const liveConnectionMode: 'system' | 'tun' | null =
-    tunConnected && !indicator
-      ? 'tun'
-      : indicator && !tunConnected
-        ? 'system'
-        : null
-  if (!busy && liveConnectionMode && liveConnectionMode !== connectionMode) {
-    setConnectionMode(liveConnectionMode)
-  }
-  const connected = connectionMode === 'tun' ? tunConnected : indicator
+  const liveConnectionMode: 'system' | 'tun' | null = tunConnected
+    ? 'tun'
+    : indicator
+      ? 'system'
+      : null
+  const displayedConnectionMode = liveConnectionMode ?? connectionMode
+  const connected = liveConnectionMode !== null
   const configuredRoutingMode = clashConfig?.mode?.toLowerCase()
   const routingMode: RoutingMode =
     optimisticRoutingMode ??
@@ -472,7 +490,7 @@ function Dashboard({
       : 'rule')
 
   const switchConnectionMode = async (nextMode: 'system' | 'tun') => {
-    if (busy || nextMode === connectionMode) return
+    if (busy || nextMode === displayedConnectionMode) return
 
     // When disconnected this is only a preference; the main button will start
     // the selected mode. When connected, migrate the live connection first.
@@ -490,18 +508,19 @@ function Dashboard({
       return
     }
 
-    const previousMode = connectionMode
+    const previousMode = displayedConnectionMode
     setBusy(true)
     setMessage('')
     try {
       if (nextMode === 'tun') {
-        await patchVerge({ enable_tun_mode: true })
-        await toggleSystemProxy(false)
+        await patchVerge({
+          enable_tun_mode: true,
+          enable_system_proxy: false,
+        })
         setConnectionMode('tun')
       } else {
         await toggleSystemProxy(true)
         setConnectionMode('system')
-        await patchVerge({ enable_tun_mode: false })
       }
     } catch (cause) {
       // Restore the previous single-mode state if the second half fails.
@@ -549,21 +568,23 @@ function Dashboard({
     setBusy(true)
     setMessage('')
     try {
-      if (connectionMode === 'tun') {
-        if (!tunConnected && !isTunModeAvailable) {
+      if (tunConnected || indicator) {
+        if (indicator) await toggleSystemProxy(false)
+        if (tunConnected) await patchVerge({ enable_tun_mode: false })
+      } else if (connectionMode === 'tun') {
+        if (!isTunModeAvailable) {
           requestService({
             reason: 'tunNeedsService',
             restore: { enable_tun_mode: true, enable_system_proxy: false },
           })
           return
         }
-        if (!tunConnected && indicator) await toggleSystemProxy(false)
-        await patchVerge({ enable_tun_mode: !tunConnected })
+        await patchVerge({
+          enable_tun_mode: true,
+          enable_system_proxy: false,
+        })
       } else {
-        if (!indicator && verge?.enable_tun_mode) {
-          await patchVerge({ enable_tun_mode: false })
-        }
-        await toggleSystemProxy(!indicator)
+        await toggleSystemProxy(true)
       }
     } catch (cause) {
       setMessage(errorMessage(cause))
@@ -578,32 +599,7 @@ function Dashboard({
     setMessage('正在清理本地代理数据…')
 
     try {
-      if (indicator) await toggleSystemProxy(false)
-      if (verge?.enable_tun_mode) {
-        await patchVerge({ enable_tun_mode: false })
-      }
-
-      const latestProfiles = await getProfiles()
-      const nexusProfiles = (latestProfiles.items ?? []).filter((item) => {
-        if (!item) return false
-        const isNexusName = item.name?.startsWith('Nexus ·') ?? false
-        const isNexusSubscription =
-          item.url?.includes('/vpn-config/subscription/') ?? false
-        return isNexusName || isNexusSubscription
-      })
-      const orderedProfiles = [...nexusProfiles].sort((left, right) =>
-        left.uid === latestProfiles.current
-          ? 1
-          : right.uid === latestProfiles.current
-            ? -1
-            : 0,
-      )
-
-      for (const item of orderedProfiles) {
-        if (item.uid) await deleteProfile(item.uid)
-      }
-
-      await enhanceProfiles()
+      await cleanupNexusSession()
       localStorage.removeItem('nexus.access-token')
       onLogout()
     } catch (cause) {
@@ -652,7 +648,7 @@ function Dashboard({
           <span>
             {session.user.username || session.user.email.split('@')[0]}
           </span>
-          <button disabled={busy} onClick={logout}>
+          <button type="button" disabled={busy} onClick={logout}>
             {busy ? '处理中' : '退出'}
           </button>
         </div>
@@ -661,7 +657,7 @@ function Dashboard({
         <section className="nexus-dashboard">
           <p className="nexus-subtitle">
             {connected
-              ? `流量正在通过${connectionMode === 'tun' ? ' TUN' : '系统代理'}传输`
+              ? `流量正在通过${displayedConnectionMode === 'tun' ? ' TUN' : '系统代理'}传输`
               : current
                 ? `已选择 ${current.name}`
                 : '正在同步您的服务配置'}
@@ -671,7 +667,7 @@ function Dashboard({
               <span>接入方式</span>
               <select
                 aria-label="接入方式"
-                value={connectionMode}
+                value={displayedConnectionMode}
                 disabled={busy}
                 onChange={(event) =>
                   void switchConnectionMode(
@@ -706,6 +702,7 @@ function Dashboard({
             </label>
           </div>
           <button
+            type="button"
             className={`nexus-connect ${connected ? 'connected' : ''}`}
             disabled={busy || !current || runningMode === 'NotRunning'}
             onClick={toggle}
@@ -721,7 +718,7 @@ function Dashboard({
               {runningMode === 'NotRunning'
                 ? '内核未就绪'
                 : connected
-                  ? `${connectionMode === 'tun' ? 'TUN' : '系统代理'}已连接`
+                  ? `${displayedConnectionMode === 'tun' ? 'TUN' : '系统代理'}已连接`
                   : '未连接'}
             </span>
             <button
@@ -737,6 +734,8 @@ function Dashboard({
               </svg>
             </button>
           </div>
+          {/* A div is required here because fieldset's native border and sizing break the compact rate row. */}
+          {/* biome-ignore lint/a11y/useSemanticElements: this is a live status display, not form controls */}
           <div
             className="nexus-speed-row"
             role="group"
@@ -881,6 +880,7 @@ export default function NexusApp() {
   const [session, setSession] = useState<Session | null>(null)
   const [checking, setChecking] = useState(Boolean(persistedToken))
   const [authNotice, setAuthNotice] = useState('')
+  const cleanupRef = useRef<Promise<void> | null>(null)
 
   useEffect(() => {
     const expireSession = () => {
@@ -888,6 +888,16 @@ export default function NexusApp() {
       setSession(null)
       setChecking(false)
       setAuthNotice('登录已过期，请重新登录')
+      if (!cleanupRef.current) {
+        cleanupRef.current = cleanupNexusSession()
+          .catch((cause) => {
+            console.error('[nexus] 登录过期后的本地清理失败:', cause)
+            setAuthNotice('登录已过期；部分本地代理数据清理失败，请重试退出')
+          })
+          .finally(() => {
+            cleanupRef.current = null
+          })
+      }
     }
     window.addEventListener(AUTH_EXPIRED_EVENT, expireSession)
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, expireSession)

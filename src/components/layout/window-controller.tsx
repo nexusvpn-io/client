@@ -43,7 +43,9 @@ export const WindowResizeHandles = () => {
     [currentWindow],
   )
 
-  if (getSystem() !== 'linux' || maximized) return null
+  // Nexus uses the same frameless window on every desktop platform. Keep the
+  // custom resize surface available wherever the native frame is absent.
+  if (maximized) return null
 
   return (
     <div

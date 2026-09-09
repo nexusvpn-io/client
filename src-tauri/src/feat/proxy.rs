@@ -27,17 +27,9 @@ pub async fn toggle_system_proxy() -> Option<bool> {
     }
 
     let requested = !current;
-    let patch_result = notification::asking_for(
-        toggle_operation(requested),
-        Box::pin(super::patch_verge(
-            &IVerge {
-                enable_system_proxy: Some(requested),
-                ..IVerge::default()
-            },
-            false,
-        )),
-    )
-    .await;
+    let patch = system_proxy_patch(requested);
+    let patch_result =
+        notification::asking_for(toggle_operation(requested), Box::pin(super::patch_verge(&patch, false))).await;
 
     match patch_result {
         Ok(_) => Some(requested),
@@ -46,6 +38,15 @@ pub async fn toggle_system_proxy() -> Option<bool> {
             report_toggle_failure(&err).await;
             None
         }
+    }
+}
+
+fn system_proxy_patch(enabled: bool) -> IVerge {
+    IVerge {
+        enable_system_proxy: Some(enabled),
+        // Every entry point (window, tray, hotkey) shares this transition.
+        enable_tun_mode: enabled.then_some(false),
+        ..IVerge::default()
     }
 }
 
@@ -68,16 +69,9 @@ const fn toggle_operation(requested: bool) -> FailedOperation {
 pub async fn toggle_tun_mode(not_save_file: Option<bool>) -> bool {
     let current = Config::verge().await.latest_arc().enable_tun_mode.unwrap_or(false);
     let enable = !current;
+    let patch = tun_mode_patch(enable);
 
-    match super::patch_verge(
-        &IVerge {
-            enable_tun_mode: Some(enable),
-            ..IVerge::default()
-        },
-        not_save_file.unwrap_or(false),
-    )
-    .await
-    {
+    match super::patch_verge(&patch, not_save_file.unwrap_or(false)).await {
         Ok(_) => {
             handle::Handle::refresh_verge();
             // Reconciliation may immediately disable unavailable TUN; report the resulting state.
@@ -87,6 +81,14 @@ pub async fn toggle_tun_mode(not_save_file: Option<bool>) -> bool {
             logging!(error, Type::ProxyMode, "{err:#}");
             current
         }
+    }
+}
+
+fn tun_mode_patch(enabled: bool) -> IVerge {
+    IVerge {
+        enable_tun_mode: Some(enabled),
+        enable_system_proxy: enabled.then_some(false),
+        ..IVerge::default()
     }
 }
 
@@ -135,5 +137,33 @@ pub async fn copy_clash_env() {
 
     if clipboard.write_text(&export_text).is_err() {
         logging!(error, Type::ProxyMode, "Failed to write to clipboard");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{system_proxy_patch, tun_mode_patch};
+
+    #[test]
+    fn enabling_system_proxy_disables_tun() {
+        let patch = system_proxy_patch(true);
+        assert_eq!(patch.enable_system_proxy, Some(true));
+        assert_eq!(patch.enable_tun_mode, Some(false));
+    }
+
+    #[test]
+    fn enabling_tun_disables_system_proxy() {
+        let patch = tun_mode_patch(true);
+        assert_eq!(patch.enable_tun_mode, Some(true));
+        assert_eq!(patch.enable_system_proxy, Some(false));
+    }
+
+    #[test]
+    fn disabling_one_mode_does_not_enable_or_disable_the_other() {
+        let system_patch = system_proxy_patch(false);
+        assert_eq!(system_patch.enable_tun_mode, None);
+
+        let tun_patch = tun_mode_patch(false);
+        assert_eq!(tun_patch.enable_system_proxy, None);
     }
 }

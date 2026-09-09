@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react'
+import type React from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   getBaseConfig,
   getRuleProviders,
@@ -15,7 +16,11 @@ import {
   getSystemProxy,
 } from '@/services/cmds'
 import { subscribeVergeEvents } from '@/services/events'
-import { revalidateQueries, useQuery } from '@/services/query-client'
+import {
+  revalidateQueries,
+  setCacheDataAsync,
+  useQuery,
+} from '@/services/query-client'
 import { resolveDisplayedMixedPort } from '@/utils/mixed-port'
 
 import {
@@ -152,11 +157,38 @@ export const AppDataProvider = ({
       void revalidateQueries([['getProfiles']])
     }
 
-    return subscribeVergeEvents({
-      'profile-changed': handleProfileChanged,
-      'verge://refresh-profiles': handleRefreshProfiles,
-      'verge://refresh-proxy-config': handleRefreshProxy,
-    })
+    const revalidateKeys = (keys: readonly string[]) => {
+      void revalidateQueries(keys.map((key) => [key]))
+    }
+
+    return subscribeVergeEvents(
+      {
+        'profile-changed': handleProfileChanged,
+        'verge://refresh-profiles': handleRefreshProfiles,
+        'verge://refresh-proxy-config': handleRefreshProxy,
+        'verge://refresh-verge-config': () => {
+          revalidateKeys([
+            'getVergeConfig',
+            'getSystemProxy',
+            'getAutotemProxy',
+          ])
+        },
+        'verge://refresh-clash-config': () => {
+          revalidateKeys([
+            'getProxyView',
+            'getClashConfig',
+            'getClashInfo',
+            'getRuntimeConfig',
+            'getRules',
+            'getRuleProviders',
+          ])
+        },
+        'verge://run-state-changed': (payload) => {
+          void setCacheDataAsync(runStateQueryKey, payload)
+        },
+      },
+      () => revalidateKeys(['getRuntimeState']),
+    )
   }, [refreshProxy])
 
   const refreshAll = useCallback(async () => {
