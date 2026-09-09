@@ -30,7 +30,7 @@
   "identifier": "ltd.nexusvpn.client",
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQyOEMyRjBCQkVGOUJEREYKUldUZnZmbStDeStNMHU5Mmo1N24xQXZwSVRYbXA2NUpzZE5oVzlqeS9Bc0t6RVV4MmtwVjBZaHgK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY5QjA4QzU3MzNBNkI3NjEKUldSaHQ2WXpWNHl3K2JqelpYLzA0WHFWOFhLYzBNeURaOVhZWDJjY21xME5MZFQzdTBNV3ZDbWYK",
       "endpoints": [
         "https://web.nexusvpn.ltd/api/client/updates/{{target}}/{{arch}}/{{current_version}}?bundle={{bundle_type}}"
       ],
